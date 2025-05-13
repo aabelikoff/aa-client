@@ -30,6 +30,8 @@ const OWNER_PRIVATE_KEY = process.env.OWNER_PRIVATE_KEY;
 
 const ENTRY_POINT_ADDRESS = process.env.ENTRY_POINT_ADDRESS;
 const entryPoint = getEntryPoint(arbitrumSepolia, { version: "0.7.0" });
+console.log("EP address:", entryPoint.address);
+console.log("EP address from env:", ENTRY_POINT_ADDRESS);
 
 const FACTORY_ADDRESS = process.env
   .ACCOUNT_FACTORY_CONTRACT_ADDRESS! as `0x${string}`;
@@ -75,7 +77,7 @@ const accountAbi = contracts.default.Account.abi;
       functionName: TARGET_CONTRACT_METHOD,
       args: TARGET_METHOD_PARAMS,
     });
-    console.log("Encoded addCompanyInfo calldata: ", encodedAddTargetnfo);
+    console.log("Encoded target method calldata: ", encodedAddTargetnfo);
 
     //call data for execute in cmart account
     const encodeExecuteCallData = encodeFunctionData({
@@ -125,7 +127,9 @@ const accountAbi = contracts.default.Account.abi;
     console.log("Factory Address: ", await client.account.getFactoryAddress());
     console.log("EntryPoint Address: ", client.account.getEntryPoint().address);
 
-    
+    const initCode = await client.account.getInitCode();
+    console.log("Init Code: ", initCode);
+
     const userOp = await client.buildUserOperation({
       uo: {
         target: account.address,
