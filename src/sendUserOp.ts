@@ -18,6 +18,7 @@ import {
   type SignableMessage,
   type TypedDataDefinition,
   toHex,
+  toBytes,
 } from "viem";
 //   import { arbitrumSepolia } from "@aa-sdk/core";
 import * as dotenv from "dotenv";
@@ -87,6 +88,11 @@ const accountAbi = contracts.default.Account.abi;
     });
     console.log("Encoded execute calldata: ", encodeExecuteCallData);
 
+    const dummyMessage = "dummy userOp";
+    const dummySignature = await signer.signMessage({
+      raw: toBytes(dummyMessage),
+    });
+
     const account = await toSmartContractAccount({
       source: "Account",
       transport: http(rpcUrl),
@@ -94,7 +100,7 @@ const accountAbi = contracts.default.Account.abi;
       entryPoint,
       getAccountInitCode: async () => encodedCalldata,
       getDummySignature: () =>
-        "0x00fffffffffffffffffffffffffffffff0000000000000000000000000000000007aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1c",
+        dummySignature,
       encodeExecute: async ({ target, data, value }) => {
         return encodeFunctionData({
           abi: accountAbi,
@@ -139,18 +145,10 @@ const accountAbi = contracts.default.Account.abi;
       account,
     });
 
-    
-
-    // console.log('UserOp: ', userOp);
+    console.log('UserOp: ', userOp);
 
     // const userOpHash = await client.sendUserOperation({
-    //   account,
-    //   uo: {
-    //     target: account.address,
-    //     data: encodeExecuteCallData,
-    //     value: 0n
-    //   },
-
+    //   uo: userOp
     // });
 
     // console.log("UserOperation Hash:", userOpHash);
@@ -158,7 +156,8 @@ const accountAbi = contracts.default.Account.abi;
     // const txHash = await client.waitForUserOperationTransaction(userOpHash);
     // console.log("Transaction Hash:", txHash);
   } catch (error) {
-    console.error("❌ Ошибка во время выполнения sendUserOp.ts:", error);
+     console.error("❌ Ошибка во время выполнения sendUserOp.ts:");
+    console.error(error instanceof Error ? error.stack : error);
     process.exit(1);
   }
 })();
