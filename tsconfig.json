@@ -1,0 +1,30 @@
+{
+    "compilerOptions": {
+      "target": "ES2020",
+      "module": "NodeNext",
+      "moduleResolution": "NodeNext",
+      "esModuleInterop": true,
+      "resolveJsonModule": true,
+      "strict": true,
+      "types": ["node"],
+      "skipLibCheck": true,
+      "allowSyntheticDefaultImports": true,
+      "experimentalDecorators": true,
+      "noEmit": true
+    },
+    "include": ["src"],
+    "exclude": ["node_modules", "dist"]
+  }
+// {
+//    "compilerOptions": {
+//     "module": "NodeNext",
+//     "target": "ES2020",
+//     "moduleResolution": "NodeNext",
+//     "esModuleInterop": true,
+//     "resolveJsonModule": true,
+//     "allowSyntheticDefaultImports": true
+//   },
+//   "include": ["src/**/*.ts"],
+//     "exclude": ["node_modules", "dist"]
+//   }
+  
