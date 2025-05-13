@@ -143,8 +143,8 @@ async function main() {
   const userOpHash = await entryPoint.getUserOpHash(userOp);
   console.log("UserOpHash:", userOpHash);
 
-//   const signature = await owner.signMessage(ethers.getBytes(userOpHash));
-  const signature = await owner.signMessage(userOpHash);
+  const signature = await owner.signMessage(ethers.getBytes(userOpHash));
+  // const signature = await owner.signMessage(userOpHash);
   userOp.signature = signature;
   console.log("Signature:", signature);
   
@@ -168,13 +168,13 @@ async function main() {
   }
 //   console.log(userOpForRpc);
 
-  const res = await provider.send('eth_sendUserOperation', [userOpForRpc,ENTRY_POINT_ADDRESS]);
-  console.log(res);
+  // const res = await provider.send('eth_sendUserOperation', [userOpForRpc,ENTRY_POINT_ADDRESS]);
+  // console.log(res);
 
 //sending through EntryPoint directly
-// const tx = await entryPoint.handleOps([userOp], owner.address);
-// const receipt = await tx.wait();
-// console.log(receipt);
+const tx = await entryPoint.handleOps([userOp], owner.address);
+const receipt = await tx.wait();
+console.log(receipt);
 
 }
 
