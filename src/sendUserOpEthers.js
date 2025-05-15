@@ -1,5 +1,6 @@
-import { ethers } from "ethers";
+import { ethers, formatEther, keccak256 } from "ethers";
 import * as contracts from "./contracts/index.js";
+import { unpackUserOp } from "./utils.js";
 import { config } from "dotenv";
 config();
 
@@ -9,12 +10,17 @@ import {
   LocalAccountSigner,
   getEntryPoint,
   buildUserOperation,
+  EntryPointAbi_v7,
+  
 } from "@aa-sdk/core";
+
+import { getUserOperationHash } from "viem/account-abstraction";
 import { arbitrumSepolia } from "viem/chains";
 
 const rpcUrl = `https://arb-sepolia.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`;
 const provider = new ethers.JsonRpcProvider(rpcUrl);
 const OWNER_PRIVATE_KEY = process.env.OWNER_PRIVATE_KEY;
+
 
 const ENTRY_POINT_ADDRESS = process.env.ENTRY_POINT_ADDRESS;
 const FACTORY_ADDRESS = process.env.ACCOUNT_FACTORY_CONTRACT_ADDRESS;
@@ -22,30 +28,67 @@ const PAYMASTER_ADDRESS = process.env.PAYMASTER_CONTRACT_ADDRESS;
 const TARGET_CONTRACT_ADDRESS = process.env.COMPANY_CONTRACT_ADDRESS;
 const TARGET_CONTRACT_NAME = 'CompanyContract';
 const TARGET_CONTRACT_METHOD = 'addCompanyInfo';
-const TARGET_METHOD_PARAMS = ['name123', 'description123'];
+const TARGET_METHOD_PARAMS = ['SuperCompany', 'hello world'];
 
 const epAddress = getEntryPoint(arbitrumSepolia, {version: '0.7.0'});
-console.log('EP address:', epAddress.address);
+const epAddress_6 = getEntryPoint(arbitrumSepolia, {version: '0.6.0'});
+console.log('EP address 0.7.0:', epAddress.address);
+console.log('EP address 0.6.0:', epAddress_6.address);
 console.log('EP address from env:', ENTRY_POINT_ADDRESS);
 
 
+
 async function main() {
-   
-    
     const owner = new ethers.Wallet(OWNER_PRIVATE_KEY, provider);
     console.log('Owner address:', owner.address);
 
      const entryPoint  = new ethers.Contract(
         ENTRY_POINT_ADDRESS,
-        contracts.default.EntryPointContract.abi,
+        EntryPointAbi_v7,
         owner
     )
 
-    const verificationGasLimit = 1_500_000n;
-    const callGasLimit = 1_500_000n;
-    const preVerificationGas = 100_000n;
-    const validationGasLimit = 100_000n;
+    const paymasterContract = new ethers.Contract(
+        PAYMASTER_ADDRESS,
+        contracts.default.PaymasterContract.abi,
+        owner
+    )
+
+    async function getDepositInfo(){
+      const [ deposit, isStaked, stakeSum, unstakeDelaySec, withdrawTime ] = await paymasterContract.getDepositInfo();
+      return {
+        deposit, 
+        isStaked,
+        stakeSum,
+        unstakeDelaySec,
+        withdrawTime
+      }
+    }
+    const depositInfo = await getDepositInfo();
+    console.log('Deposit info:', depositInfo);
+
+    
+    const minimumStake = formatEther(BigInt('0x16345785d8a0000'));
+    const minimumUnstakeDelay = BigInt('0x15180');
+    console.log('Minimum stake:', minimumStake);
+    console.log('Minimum unstake delay:', minimumUnstakeDelay);
+
+    if(!depositInfo.deposit){
+      await paymasterContract.depositToEntryPoint({value: ethers.parseEther('0.005')});
+      console.log('Deposited to EntryPoint');
+    }
+    if(!depositInfo.isStaked){
+      await paymasterContract.addStakeToEntryPoint(minimumUnstakeDelay, {value: ethers.parseEther(minimumStake)});
+      console.log('Staked to EntryPoint');
+    }
+    // const txDepo = await paymasterContract.depositToEntryPoint({value: ethers.parseEther('0.002')});
+    // const receiptDepo = await txDepo.wait();
+
+    // const validationGasLimit = 100_000n;
     const postOpGasLimit = 150_000n;
+
+    //checking staking balance
+
 
     const feeData = await provider.getFeeData();
     const maxFeePerGas = feeData.maxFeePerGas;
@@ -56,21 +99,6 @@ async function main() {
     console.log(maxFeePerGas);
     console.log(maxPriorityFeePerGas);
     
-    const accountGasLimits = ethers.solidityPacked(
-        ["uint128", "uint128"],
-        [verificationGasLimit, callGasLimit]
-    );
-
-    const gasFees = ethers.solidityPacked(
-        ["uint128", "uint128"],
-        [maxFeePerGas, maxPriorityFeePerGas]
-    );
-
-    
-  let paymasterAndData = ethers.solidityPacked(
-    ['address', 'uint128', 'uint128', 'bytes'],
-    [PAYMASTER_ADDRESS, validationGasLimit, postOpGasLimit, dummyData]
-  );
 
   const AccountFactory = new ethers.ContractFactory(
     contracts.default.AccountFactory.abi,
@@ -86,7 +114,7 @@ async function main() {
 
   let sender;
   try {
-    await entryPoint.connect(owner) .getSenderAddress(initCode);
+    await entryPoint.connect(owner).getSenderAddress(initCode);
   } catch (ex) {
     sender = '0x' + ex.data.slice(-40);
   }
@@ -123,73 +151,74 @@ async function main() {
         targetMethodCallData
       ]
   );
-
   const nonce = await entryPoint.getNonce(sender, 0);
+  console.log("Nonce: ", nonce.toString());
 
-   const userOp = {
-    sender,
-    nonce,
-    initCode,
-    callData,
-    accountGasLimits,
-    preVerificationGas,
-    gasFees,
-    paymasterAndData,
-    signature:
-      '0x'
-  };
-
-  // sign UserOperation
-  const userOpHash = await entryPoint.getUserOpHash(userOp);
-  console.log("UserOpHash:", userOpHash);
-
-  const signature = await owner.signMessage(ethers.getBytes(userOpHash));
-  // const signature = await owner.signMessage(userOpHash);
-  userOp.signature = signature;
-  console.log("Signature:", signature);
   
-    const userOpForRpc = {
+  //creating userOp for bundler
+  const userOpBundler = {
     sender,
-    nonce: ethers.toBeHex(userOp.nonce),
+    nonce: ethers.toBeHex(nonce),
     initCode,
     callData,
-    callGasLimit: ethers.toBeHex(callGasLimit),
-    verificationGasLimit: ethers.toBeHex(verificationGasLimit),
+    // callGasLimit: ethers.toBeHex(callGasLimit),
     maxFeePerGas: ethers.toBeHex(maxFeePerGas),
-    maxPriorityFeePerGas: ethers.toBeHex(maxPriorityFeePerGas),
+    maxPriorityFeePerGas,
     paymaster: PAYMASTER_ADDRESS,
-    paymasterData: dummyData,
-    paymasterVerificationGasLimit: ethers.toBeHex(validationGasLimit),
-    preVerificationGas: ethers.toBeHex(preVerificationGas),
     paymasterPostOpGasLimit: ethers.toBeHex(postOpGasLimit),
-    signature: userOp.signature,
-    // paymasterAndData,
-    // gasFees,
+    // preVerificationGas: ethers.toBeHex(preVerificationGas),
+    // verificationGasLimit: ethers.toBeHex(verificationGasLimit),
   }
-//   console.log(userOpForRpc);
 
-  // const res = await provider.send('eth_sendUserOperation', [userOpForRpc,ENTRY_POINT_ADDRESS]);
-  // console.log(res);
+ //esеtimating userOp gas limits
+ ;
+  const dummySignature = await owner.signMessage( ethers.getBytes(ethers.id('dummy')));
+  userOpBundler.signature = dummySignature;
 
-//sending through EntryPoint directly
-const tx = await entryPoint.handleOps([userOp], owner.address);
-const receipt = await tx.wait();
-console.log(receipt);
+  const {preVerificationGas, callGasLimit, verificationGasLimit, paymasterVerificationGasLimit } = await provider.send('eth_estimateUserOperationGas', [
+    userOpBundler,
+    ENTRY_POINT_ADDRESS,
+  ]);
+
+
+  userOpBundler.callGasLimit = callGasLimit;
+  userOpBundler.verificationGasLimit = verificationGasLimit;
+  userOpBundler.preVerificationGas = preVerificationGas;
+  userOpBundler.paymasterVerificationGasLimit = paymasterVerificationGasLimit;
+
+
+
+  
+ //getting userOpHash from bundler
+  const userOpHashBundler = getUserOperationHash({
+    chainId: 421614n,
+    entryPointAddress: ENTRY_POINT_ADDRESS,
+    entryPointVersion: '0.7',
+    userOperation: userOpBundler
+  });
+  //signing userOp for bundler
+  const signature = await owner.signMessage(ethers.getBytes(userOpHashBundler));
+  userOpBundler.signature = signature;
+  
+  
+  console.log('=============================\n')
+  console.log("UserOpHash Bundler: ", userOpHashBundler);
+  console.log('Signature: ',signature);
+  console.log('\n=============================')
+
+  console.log('UserOp Bundler: ', userOpBundler);
+
+  const res = await provider.send('eth_sendUserOperation', [userOpBundler,ENTRY_POINT_ADDRESS]);
+  console.log(res);
+
+  // sending through EntryPoint directly
+  // const tx = await entryPoint.handleOps([userOp], owner.address);
+  // const receipt = await tx.wait();
+  // console.log(receipt);
 
 }
 
- function extractPaymasterAndDataFields(packed) {
-        const paymaster = '0x' + packed.slice(2, 42); // address (20 bytes)
-        const paymasterData = '0x' + packed.slice(42); // rest (limits + dummyData)
-        return { paymaster, paymasterData };
- }
 
- function extractFactoryAndData(initCode) {
-        if (initCode === '0x') return { factory: undefined, factoryData: '0x' };
-        const factory = '0x' + initCode.slice(2, 42);
-        const factoryData = '0x' + initCode.slice(42);
-        return { factory, factoryData };
- }
 
 main()
   .then(() => process.exit(0))
