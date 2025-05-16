@@ -12,9 +12,6 @@ config();
 
 const rpcUrl = `https://arb-sepolia.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`;
 const OWNER_PRIVATE_KEY = process.env.OWNER_PRIVATE_KEY;
-
-const ENTRY_POINT_ADDRESS = process.env.ENTRY_POINT_ADDRESS;
-const FACTORY_ADDRESS = process.env.ACCOUNT_FACTORY_CONTRACT_ADDRESS;
 const PAYMASTER_ADDRESS = process.env.PAYMASTER_CONTRACT_ADDRESS;
 
 
