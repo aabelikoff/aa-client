@@ -125,7 +125,7 @@ async function main() {
       value: 0n,
     }
   });
-
+  return;
   console.log("UserOp: ", uoStruct);
 
   const uoHash = await client.sendUserOperation({
