@@ -17,14 +17,15 @@ const client = createWalletClient({
   chain: arbitrumSepolia,
   transport: http(rpcUrl),
 });
-const amount = BigInt(1e15); //0.001 ETH
+const amount = BigInt(1e14); //0.0001 ETH
 
 (async () => {
   const txHash = await client.sendTransaction({
     to: paymasterAddress,
     data: encodeFunctionData({
       abi,
-      functionName: 'depositToEntryPoint',
+      functionName: 'addStakeToEntryPoint',
+      args: [10]
     }),
     value: amount
   });
